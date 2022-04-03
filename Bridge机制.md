@@ -2,97 +2,97 @@
 
 通常情况下，我们会使用webview的addJavascriptInterface接口添加接口方法，我们就从这个接口开始看。
 
-![](./img/bridge/1.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/1.png)
 
 checkThread方法就不看了，webview的方法调用要求和webview初始化的线程相同（通常是ui线程）。
 
-![](./img/bridge/2.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/2.png)
 
-![](./img/bridge/3.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/3.png)
 
 一路向下进入到AwContents的addJavascriptInterface方法中。
 
-![](./img/bridge/4.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/4.png)
 
 传入AwContents对象懒加载JavascriptInjector对象。
 
-![](./img/bridge/5.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/5.png)
 
-![](./img/bridge/6.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/6.png)
 
-![](./img/bridge/7.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/7.png)
 
 在构造Injector时初始化持有的GinJavaBridgeDispatcherHost。
 
-![](./img/bridge/8.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/8.png)
 
 回到addJavascriptInterface方法里继续往下。
 
-![](./img/bridge/9.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/9.png)
 
 在获取到Injector对象后，会调用其AddInterface方法进行接口注入。
 
-![](./img/bridge/10.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/10.png)
 
 可以发现，在此方法中会先尝试判断是否此对象已经注入过了，如果没有的话再走AddObject方法，添加成功后会通过WebContents发送消息。
 
-![](./img/bridge/11.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/11.png)
 
 AddObject方法会狗仔GinJavaBoundObject对象，将对应的java对象信息存储在此处，并生成objectId记录下来。
 
-![](./img/bridge/12.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/12.png)
 
 GinJavaBoundObject构造时，会持有对应class的java引用，注意此处并没有将类中的方法对应初始化。
 
 在添加完接口方法后，内核便建立了java对象和桥的映射关系。
 
-![](./img/bridge/13.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/13.png)
 
 然后在RenderFrame创建后，会创建GinJavaBridgeDispatcher。同时在前文中创建过的GinJavaBridgeDispatcherHost，也会执行RenderFrameCreated方法。在这里会创建一个GinJavaBridgeMessageFilter用于接收所有和JavaBridge相关的消息并进行处理。之后将GinJavaBridgeDispatcherHost持有的named_objects遍历，发送message通知GinJavaBridgeDispatcher去同步更新他持有的named_objects。
 
-![](./img/bridge/14.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/14.png)
 
 这里由于chromium是多进程架构的，在android中如果采用多进程模式，Browser和Render进程之间通讯是通过IPC进行的，所以采取了IPCMessage的方式进行同步，保证处于Browser的GinJavaBridgeDispatcherHost和处于Render的GinJavaBridgeDispatcher中持有的named_objects内容相同。
 
 同时当h5侧去尝试调用客户断的Bridge方式时，也会通过GinJavaBridgeDispatcher发送消息至GinJavaBridgeDispatcherHost进行相关处理。
 
-![](./img/bridge/15.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/15.png)
 
 h5侧的bridge调用会分为两个阶段。当v8接收到桥调用时，首先是对检索函数对象，检索由GinJavaBridgeObject::GetNamedProperty方法进行处理。
 
-![](./img/bridge/16.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/16.png)
 
 如果是第一次调用，就会调用至GinJavaBridgeDispatcherHost的OnHasMethod方法中。
 
-![](./img/bridge/17.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/17.png)
 
-![](./img/bridge/18.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/18.png)
 
 走到GinJavaBoundObject::HasMethod中，会先调用EnsureMethodsAreSetUp方法确保methods_信息正确。
 
-![](./img/bridge/19.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/19.png)
 
 在这个方法里，会通过JNI方法里获得method信息，并构造JavaMethod对象存储这些信息，再将对象存储进methods属性中。
 
 回到GinJavaBridgeObject::GetNamedProperty方法中，将HasJavaMethod结果返回给known_methods_存储，这样下次调用同一个方法就不需要再次发IPC消息查询。继续往下，走到GetFunctionTemplate方法中。
 
-![](./img/bridge/20.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/20.png)
 
 CreateFunctionTemplate会在v8中创建一个用于执行c++方法的javascript方法。创建后会保存在template_cache_中供下次重复使用。
 
 第二阶段，当方法真正被执行时，会走到render中的GinJavaFunctionInvocationHelper::Invoke方法中。
 
-![](./img/bridge/21.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/21.png)
 
 这里这里你只需要知道是在根据需要转换参数类型，并通过dispatcher发送IPCMessage传递给Browser中的GinJavaBridgeDispatcherHost即可。
 
-![](./img/bridge/22.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/22.png)
 
-![](./img/bridge/23.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/23.png)
 
 在这个方法中，会创建GinJavaMethodInvocationHelper，并调用其Invoke方法。但是注意，这个类和上面的同名的类，并不是同一个类。
 
-![](./img/bridge/24.png)
+![](https://github.com/Aquarids/WebViewNote/blob/master/img/bridge/24.png)
 
 在Browser中的GinJavaMethodInvocationHelper::Invoke方法中，会完成数据类型的转化并真正的根据映射调用JNI到java方法中，并将执行方法的结果进行返回。返回给Render中的GinJavaMethodInvocationHelper::Invoke方法中继续执行。Render中的GinJavaMethodInvocationHelper::Invoke收到result后，会再次在v8中进行类型转换，并最终返回给前端。
 
